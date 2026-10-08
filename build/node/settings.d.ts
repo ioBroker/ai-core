@@ -45,7 +45,7 @@ export interface AiNativeFields {
  * @param native the configuration of the instance (`this.config`)
  * @param fields what the fields are called in this adapter
  */
-export declare function readAiSettings(native: Record<string, unknown> | null | undefined, fields: AiNativeFields): AiSettings;
+export declare function readAiSettings(native: object | null | undefined, fields: AiNativeFields): AiSettings;
 /** ID of the object with the system-wide assistant settings */
 export declare const SYSTEM_AI_OBJECT_ID = "system.ai";
 /** The `native` of `system.ai`, as the settings dialog of admin stores it */

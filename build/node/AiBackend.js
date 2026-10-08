@@ -26,10 +26,11 @@ const types_1 = require("../shared/types");
 const credentials_1 = require("./credentials");
 const providers_1 = require("./providers");
 const settings_1 = require("./settings");
-/** What a jsonConfig form sends: a value that is still a placeholder (`${data.x}`) was never filled in */
+/** What a jsonConfig form sends: a placeholder (`${data.x}`) or an `undefined` was never filled in */
 function formValue(value) {
     const text = typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
-    return text.includes('${') ? '' : text;
+    // depending on the admin version an empty field arrives as the placeholder or as its stringified nothing
+    return text.includes('${') || text === 'undefined' || text === 'null' ? '' : text;
 }
 function errorText(e) {
     return e instanceof Error ? e.message : String(e);

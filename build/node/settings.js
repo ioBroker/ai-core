@@ -37,7 +37,8 @@ function effortOf(value) {
  * @param fields what the fields are called in this adapter
  */
 function readAiSettings(native, fields) {
-    const cfg = native || {};
+    // an adapter config has no index signature - the fields are looked up by the names given in `fields`
+    const cfg = (native || {});
     const keys = {};
     const credentialIds = {};
     for (const provider of types_1.AI_PROVIDERS) {

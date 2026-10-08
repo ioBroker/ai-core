@@ -73,8 +73,9 @@ function effortOf(value: unknown): AiReasoningEffort {
  * @param native the configuration of the instance (`this.config`)
  * @param fields what the fields are called in this adapter
  */
-export function readAiSettings(native: Record<string, unknown> | null | undefined, fields: AiNativeFields): AiSettings {
-    const cfg = native || {};
+export function readAiSettings(native: object | null | undefined, fields: AiNativeFields): AiSettings {
+    // an adapter config has no index signature - the fields are looked up by the names given in `fields`
+    const cfg = (native || {}) as Record<string, unknown>;
     const keys: AiSettings['keys'] = {};
     const credentialIds: AiSettings['credentialIds'] = {};
     for (const provider of AI_PROVIDERS) {
