@@ -97,7 +97,7 @@ import { runToolLoop, type OpenAIMessage } from '@iobroker/ai-core/build/shared'
     Placeholder for the next version (at the beginning of the line):
     ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 0.0.2 (2026-10-08)
 - (@GermanBluefox) Initial version: providers, settings, credentials and the sendTo protocol taken from admin, javascript and vis-2
 - (@GermanBluefox) Fixed: `readAiSettings` takes an adapter config without a cast
 - (@GermanBluefox) Fixed: a form field that arrives as `undefined` or `null` counts as empty
