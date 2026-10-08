@@ -1,0 +1,72 @@
+{
+  "name": "@iobroker/ai-core",
+  "version": "0.0.1",
+  "description": "ioBroker AI backend: LLM providers, credentials and the sendTo protocol shared by admin, javascript and vis-2",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ioBroker/ai-core.git"
+  },
+  "homepage": "https://github.com/ioBroker/ai-core#readme",
+  "bugs": {
+    "url": "https://github.com/ioBroker/ai-core/issues"
+  },
+  "keywords": [
+    "ioBroker",
+    "ai",
+    "llm",
+    "openai",
+    "anthropic"
+  ],
+  "author": {
+    "name": "ioBroker",
+    "email": "info@iobroker.net"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && mocha test --exit",
+    "test:package": "mocha test --exit",
+    "lint": "eslint -c eslint.config.mjs src",
+    "prettier": "prettier -u -w src test",
+    "release": "release-script",
+    "release-patch": "release-script patch --yes",
+    "release-minor": "release-script minor --yes",
+    "release-major": "release-script major --yes",
+    "update-packages": "npx -y npm-check-updates --upgrade",
+    "npm": "npm i -f"
+  },
+  "peerDependencies": {
+    "@iobroker/adapter-core": ">=3.4.3"
+  },
+  "peerDependenciesMeta": {
+    "@iobroker/adapter-core": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@alcalzone/release-script": "^5.2.1",
+    "@alcalzone/release-script-plugin-license": "^5.2.2",
+    "@iobroker/adapter-core": "^3.4.3",
+    "@iobroker/eslint-config": "^2.3.4",
+    "@iobroker/types": "^7.2.5",
+    "@types/node": "^22.20.5",
+    "mocha": "^12.0.0",
+    "typescript": "~6.0.3"
+  },
+  "overrides": {
+    "@iobroker/types": "$@iobroker/types"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "build"
+  ]
+}
