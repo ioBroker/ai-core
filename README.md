@@ -97,7 +97,7 @@ import { runToolLoop, type OpenAIMessage } from '@iobroker/ai-core/build/shared'
     Placeholder for the next version (at the beginning of the line):
     ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 0.0.3 (2026-10-09)
 - (@GermanBluefox) Fixed: "Connection failed" says why, also when a host has several addresses (`localhost`)
 
 ### 0.0.2 (2026-10-08)

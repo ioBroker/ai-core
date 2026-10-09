@@ -1,6 +1,6 @@
 {
   "name": "@iobroker/ai-core",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "ioBroker AI backend: LLM providers, credentials and the sendTo protocol shared by admin, javascript and vis-2",
   "main": "build/index.js",
   "types": "build/index.d.ts",
