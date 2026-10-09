@@ -1,6 +1,6 @@
 const assert = require('node:assert').strict;
 const http = require('node:http');
-const { chatCompletion, listModels, AiRequestError, AiBackend, readAiSettings } = require('../build');
+const { chatCompletion, listModels, AiRequestError, AiBackend, readAiSettings, describeConnectionError } = require('../build');
 
 /**
  * A local OpenAI-compatible endpoint. `handler` decides the answer of every request and sees what
@@ -242,6 +242,20 @@ describe('Test providers and AiBackend', function () {
                 listModels({ provider: 'custom', baseUrl: endpoint.url, apiKey: 'k' }),
                 /Invalid API key/,
             );
+        });
+
+        it('says why the connection failed, also when Node tried several addresses', async function () {
+            // `localhost` is `::1` and `127.0.0.1`: Node tries both and throws an AggregateError without message
+            await assert.rejects(
+                listModels({ provider: 'custom', baseUrl: 'http://localhost:1/v1', apiKey: 'k' }),
+                /Connection failed: \S/,
+            );
+            const aggregate = Object.assign(new AggregateError([new Error('connect ECONNREFUSED ::1:1')], ''), {
+                code: 'ECONNREFUSED',
+            });
+            assert.equal(describeConnectionError(aggregate, new URL('http://localhost:1')), 'connect ECONNREFUSED ::1:1');
+            const bare = Object.assign(new Error(''), { code: 'ECONNRESET' });
+            assert.equal(describeConnectionError(bare, new URL('http://localhost:1')), 'ECONNRESET (localhost:1)');
         });
     });
 

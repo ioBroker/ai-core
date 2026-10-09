@@ -17,6 +17,15 @@ export interface AiHttpRequest {
 export declare class AiConnectionError extends Error {
 }
 /**
+ * Why a connection failed, readable. When a host has several addresses (`localhost` = `::1` and
+ * `127.0.0.1`), Node tries them all and throws an `AggregateError` with an empty message; the reason is
+ * then only in its `errors` and `code`
+ *
+ * @param e what `http.request` emitted
+ * @param url where the request went
+ */
+export declare function describeConnectionError(e: Error, url: URL): string;
+/**
  * Send the request and collect the answer. Rejects only when no answer came at all - an HTTP error
  * status is an answer and resolves
  *

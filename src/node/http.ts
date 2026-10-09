@@ -28,6 +28,26 @@ export interface AiHttpRequest {
 export class AiConnectionError extends Error {}
 
 /**
+ * Why a connection failed, readable. When a host has several addresses (`localhost` = `::1` and
+ * `127.0.0.1`), Node tries them all and throws an `AggregateError` with an empty message; the reason is
+ * then only in its `errors` and `code`
+ *
+ * @param e what `http.request` emitted
+ * @param url where the request went
+ */
+export function describeConnectionError(e: Error, url: URL): string {
+    const nested = (e as Error & { errors?: unknown }).errors;
+    if (Array.isArray(nested)) {
+        const messages = nested.map(n => (n instanceof Error ? n.message : String(n))).filter(Boolean);
+        if (messages.length) {
+            return [...new Set(messages)].join('; ');
+        }
+    }
+    const code = (e as NodeJS.ErrnoException).code;
+    return e.message || `${code || 'unknown error'} (${url.host})`;
+}
+
+/**
  * Send the request and collect the answer. Rejects only when no answer came at all - an HTTP error
  * status is an answer and resolves
  *
@@ -63,9 +83,13 @@ export function aiHttpRequest(request: AiHttpRequest): Promise<AiHttpResponse> {
             const chunks: Buffer[] = [];
             res.on('data', (chunk: Buffer) => chunks.push(chunk));
             res.on('end', () => resolve({ status: res.statusCode || 0, body: Buffer.concat(chunks).toString('utf8') }));
-            res.on('error', (e: Error) => reject(new AiConnectionError(`Connection failed: ${e.message}`)));
+            res.on('error', (e: Error) =>
+                reject(new AiConnectionError(`Connection failed: ${describeConnectionError(e, parsedUrl)}`)),
+            );
         });
-        req.on('error', (e: Error) => reject(new AiConnectionError(`Connection failed: ${e.message}`)));
+        req.on('error', (e: Error) =>
+            reject(new AiConnectionError(`Connection failed: ${describeConnectionError(e, parsedUrl)}`)),
+        );
         req.on('timeout', () => {
             req.destroy();
             reject(new AiConnectionError(`Connection timeout (${Math.round(request.timeoutMs / 1000)}s)`));

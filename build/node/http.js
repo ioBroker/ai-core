@@ -34,6 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AiConnectionError = void 0;
+exports.describeConnectionError = describeConnectionError;
 exports.aiHttpRequest = aiHttpRequest;
 /**
  * One HTTP request with a JSON answer, over `node:http`/`node:https`.
@@ -47,6 +48,25 @@ const https = __importStar(require("node:https"));
 class AiConnectionError extends Error {
 }
 exports.AiConnectionError = AiConnectionError;
+/**
+ * Why a connection failed, readable. When a host has several addresses (`localhost` = `::1` and
+ * `127.0.0.1`), Node tries them all and throws an `AggregateError` with an empty message; the reason is
+ * then only in its `errors` and `code`
+ *
+ * @param e what `http.request` emitted
+ * @param url where the request went
+ */
+function describeConnectionError(e, url) {
+    const nested = e.errors;
+    if (Array.isArray(nested)) {
+        const messages = nested.map(n => (n instanceof Error ? n.message : String(n))).filter(Boolean);
+        if (messages.length) {
+            return [...new Set(messages)].join('; ');
+        }
+    }
+    const code = e.code;
+    return e.message || `${code || 'unknown error'} (${url.host})`;
+}
 /**
  * Send the request and collect the answer. Rejects only when no answer came at all - an HTTP error
  * status is an answer and resolves
@@ -82,9 +102,9 @@ function aiHttpRequest(request) {
             const chunks = [];
             res.on('data', (chunk) => chunks.push(chunk));
             res.on('end', () => resolve({ status: res.statusCode || 0, body: Buffer.concat(chunks).toString('utf8') }));
-            res.on('error', (e) => reject(new AiConnectionError(`Connection failed: ${e.message}`)));
+            res.on('error', (e) => reject(new AiConnectionError(`Connection failed: ${describeConnectionError(e, parsedUrl)}`)));
         });
-        req.on('error', (e) => reject(new AiConnectionError(`Connection failed: ${e.message}`)));
+        req.on('error', (e) => reject(new AiConnectionError(`Connection failed: ${describeConnectionError(e, parsedUrl)}`)));
         req.on('timeout', () => {
             req.destroy();
             reject(new AiConnectionError(`Connection timeout (${Math.round(request.timeoutMs / 1000)}s)`));
