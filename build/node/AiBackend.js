@@ -20,12 +20,15 @@ exports.credentialIdsOf = credentialIdsOf;
  * if (this.ai.handleMessage(obj)) return;
  * ```
  */
+const node_crypto_1 = require("node:crypto");
 const protocol_1 = require("../shared/protocol");
 const limits_1 = require("../shared/limits");
 const types_1 = require("../shared/types");
 const credentials_1 = require("./credentials");
 const providers_1 = require("./providers");
 const settings_1 = require("./settings");
+/** The fields with which the settings dialog tests what stands in its form instead of the configuration */
+const FORM_FIELDS = ['apiKey', 'baseUrl', 'credentialId', 'credentialType'];
 /** What a jsonConfig form sends: a placeholder (`${data.x}`) or an `undefined` was never filled in */
 function formValue(value) {
     const text = typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
@@ -48,7 +51,7 @@ class AiBackend {
     options;
     /** The keys of the credential store */
     credentials;
-    /** Push subscriptions: session token of an editor → client id of its socket */
+    /** Push subscriptions: the secret handed out to an editor → its socket and its user */
     uiClients = new Map();
     commands;
     constructor(adapter, options) {
@@ -76,12 +79,16 @@ class AiBackend {
         await this.credentials.unsubscribe();
     }
     /**
-     * An editor subscribes for pushed answers. It names a token of its own making; what is kept is which
-     * socket that token came in on, so an answer goes back to that one editor and not to every open tab.
+     * An editor subscribes for pushed answers, and gets the secret of its session back.
+     *
+     * The secret is made here, not by the editor: a token of the editor's own making could be named by
+     * anybody else who subscribes, and the answers of that editor would go to them. Kept with it are the
+     * socket to push to and the user the controller named for the subscription, so a request that names
+     * the session has to come from that same user.
      *
      * @param info client id and the subscribe message, as the messaging controller hands it over
      * @param info.clientId the id to address this client with later
-     * @param info.message the subscribe message, carrying the type and the session token
+     * @param info.message the subscribe message, carrying the type and - from js-controller 7.2.5 on - the user
      * @returns the answer for the controller, or `null` when the subscription is not one of the AI -
      * the adapter then decides about it itself
      */
@@ -90,13 +97,11 @@ class AiBackend {
         if (message?.type !== protocol_1.AI_PUSH_MESSAGE_TYPE) {
             return null;
         }
-        const token = (message.data?.sessionToken || '').trim();
-        if (!token) {
-            return { accepted: false, error: 'No session token provided' };
-        }
-        this.uiClients.set(token, info.clientId);
-        this.adapter.log.debug(`An editor waits for pushed AI answers (${this.uiClients.size} open)`);
-        return { accepted: true };
+        const session = (0, node_crypto_1.randomBytes)(24).toString('hex');
+        const user = info.message.user || '';
+        this.uiClients.set(session, { clientId: info.clientId, user });
+        this.adapter.log.debug(`An editor of "${user || 'unknown'}" waits for pushed AI answers (${this.uiClients.size} open)`);
+        return { accepted: true, session };
     }
     /**
      * An editor went away - every token that pointed at it is worthless now
@@ -105,9 +110,9 @@ class AiBackend {
      * @param info.clientId its id
      */
     onUiClientUnsubscribe(info) {
-        for (const [token, clientId] of this.uiClients) {
-            if (clientId === info.clientId) {
-                this.uiClients.delete(token);
+        for (const [session, entry] of this.uiClients) {
+            if (entry.clientId === info.clientId) {
+                this.uiClients.delete(session);
             }
         }
     }
@@ -122,16 +127,21 @@ class AiBackend {
         if (!command) {
             return false;
         }
-        let job;
-        if (command === protocol_1.AI_COMMANDS.providers) {
-            job = this.handleProviders(obj);
-        }
-        else if (command === protocol_1.AI_COMMANDS.models) {
-            job = this.handleModels(obj);
-        }
-        else {
-            job = this.handleChat(obj);
-        }
+        const job = this.authorize(obj, command).then(refusal => {
+            if (refusal) {
+                this.adapter.log.warn(`${obj.command} from ${obj.from}: ${refusal}`);
+                // a refused chat releases its callback like any other answer; nothing is pushed
+                this.respond(obj, { error: refusal });
+                return;
+            }
+            if (command === protocol_1.AI_COMMANDS.providers) {
+                return this.handleProviders(obj);
+            }
+            if (command === protocol_1.AI_COMMANDS.models) {
+                return this.handleModels(obj);
+            }
+            return this.handleChat(obj);
+        });
         job.catch(e => {
             this.adapter.log.warn(`${obj.command}: ${errorText(e)}`);
             if (obj.callback) {
@@ -139,6 +149,58 @@ class AiBackend {
             }
         });
         return true;
+    }
+    /**
+     * Whether the user of a request may do what it asks for. `null` means yes, a text says why not.
+     *
+     * The user is the one the controller wrote into the message (js-controller 7.2.5 on, with a socket
+     * layer that names it - socket-classes 2.7.0 on). Nobody there means the message came from another
+     * instance - a script, for instance - or through a platform too old to say; such a request is
+     * served as before, because there is nobody to check.
+     *
+     * - A request that names a session must come from the user that session was handed out to.
+     * - Testing what stands in the settings form - a key or an address not saved yet - can reach any
+     *   address from this host, so it needs the right a command on the host needs: `other.execute`.
+     *   Listing the models of the saved configuration needs nothing more than the request itself.
+     *
+     * @param obj the request
+     * @param command what it asks for
+     */
+    async authorize(obj, command) {
+        const message = (obj.message || {});
+        const sessionId = formValue(message.uiSession);
+        const session = sessionId ? this.uiClients.get(sessionId) : undefined;
+        const user = obj.user || '';
+        if (session?.user && user && session.user !== user) {
+            return 'This AI session belongs to another user';
+        }
+        const asking = user || session?.user || '';
+        if (!asking) {
+            return null;
+        }
+        if (command === protocol_1.AI_COMMANDS.models && FORM_FIELDS.some(field => formValue(message[field]))) {
+            return (await this.mayExecute(asking))
+                ? null
+                : 'No permission: testing an AI connection requires the "execute" right';
+        }
+        return null;
+    }
+    /**
+     * Whether a user has `other.execute` - the right `cmdExec` is checked against
+     *
+     * @param user the user, `system.user.xy`
+     */
+    async mayExecute(user) {
+        try {
+            const permissions = await this.adapter.calculatePermissionsAsync(user, {
+                cmdExec: { type: 'other', operation: 'execute' },
+            });
+            return !!permissions?.other?.execute;
+        }
+        catch (e) {
+            this.adapter.log.warn(`Cannot check the rights of "${user}": ${errorText(e)}`);
+            return false;
+        }
     }
     /**
      * Provider, key and address of a configured provider - all from the configuration
@@ -236,9 +298,9 @@ class AiBackend {
      * @param obj the request
      */
     buildResponder(obj) {
-        const token = formValue(obj.message?.uiSession);
+        const session = formValue(obj.message?.uiSession);
         const requestId = formValue(obj.message?.requestId);
-        const clientId = token ? this.uiClients.get(token) : undefined;
+        const clientId = session ? this.uiClients.get(session)?.clientId : undefined;
         if (!clientId || !requestId) {
             return payload => this.respond(obj, payload);
         }
@@ -253,7 +315,7 @@ class AiBackend {
                 .sendToUI({ clientId, data: { type: protocol_1.AI_PUSH_MESSAGE_TYPE, requestId, ...payload } })
                 .catch(e => {
                 // the tab was closed, or the socket died while the model was thinking
-                this.uiClients.delete(token);
+                this.uiClients.delete(session);
                 this.adapter.log.warn(`Cannot deliver the AI answer to the editor: ${errorText(e)}`);
             });
         };

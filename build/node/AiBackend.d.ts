@@ -1,21 +1,3 @@
-/**
- * The sendTo side of the AI in an adapter: it answers `ai:providers`, `ai:models` and `ai:chat`,
- * resolves the keys and pushes long answers to the editor that asked.
- *
- * Wiring in an adapter:
- *
- * ```ts
- * this.ai = new AiBackend(this, { getSettings: () => readAiSettings(this.config, MY_AI_FIELDS) });
- * // adapter options
- * uiClientSubscribe: info => this.ai.onUiClientSubscribe(info) ?? { accepted: false },
- * uiClientUnsubscribe: info => this.ai.onUiClientUnsubscribe(info),
- * // onReady / onUnload
- * await this.ai.start();
- * await this.ai.stop();
- * // onMessage
- * if (this.ai.handleMessage(obj)) return;
- * ```
- */
 import { type AiCommand } from '../shared/protocol';
 import { type AiProvider } from '../shared/types';
 import { AiCredentialStore } from './credentials';
@@ -41,7 +23,7 @@ export declare class AiBackend {
     private readonly options;
     /** The keys of the credential store */
     readonly credentials: AiCredentialStore;
-    /** Push subscriptions: session token of an editor → client id of its socket */
+    /** Push subscriptions: the secret handed out to an editor → its socket and its user */
     private readonly uiClients;
     private readonly commands;
     constructor(adapter: ioBroker.Adapter, options: AiBackendOptions);
@@ -50,12 +32,16 @@ export declare class AiBackend {
     /** End the subscriptions and forget the keys and the editors */
     stop(): Promise<void>;
     /**
-     * An editor subscribes for pushed answers. It names a token of its own making; what is kept is which
-     * socket that token came in on, so an answer goes back to that one editor and not to every open tab.
+     * An editor subscribes for pushed answers, and gets the secret of its session back.
+     *
+     * The secret is made here, not by the editor: a token of the editor's own making could be named by
+     * anybody else who subscribes, and the answers of that editor would go to them. Kept with it are the
+     * socket to push to and the user the controller named for the subscription, so a request that names
+     * the session has to come from that same user.
      *
      * @param info client id and the subscribe message, as the messaging controller hands it over
      * @param info.clientId the id to address this client with later
-     * @param info.message the subscribe message, carrying the type and the session token
+     * @param info.message the subscribe message, carrying the type and - from js-controller 7.2.5 on - the user
      * @returns the answer for the controller, or `null` when the subscription is not one of the AI -
      * the adapter then decides about it itself
      */
@@ -65,6 +51,7 @@ export declare class AiBackend {
     }): {
         accepted: boolean;
         error?: string;
+        session?: string;
     } | null;
     /**
      * An editor went away - every token that pointed at it is worthless now
@@ -82,6 +69,29 @@ export declare class AiBackend {
      * @returns `true` when the message was an AI command - it is answered asynchronously
      */
     handleMessage(obj: ioBroker.Message): boolean;
+    /**
+     * Whether the user of a request may do what it asks for. `null` means yes, a text says why not.
+     *
+     * The user is the one the controller wrote into the message (js-controller 7.2.5 on, with a socket
+     * layer that names it - socket-classes 2.7.0 on). Nobody there means the message came from another
+     * instance - a script, for instance - or through a platform too old to say; such a request is
+     * served as before, because there is nobody to check.
+     *
+     * - A request that names a session must come from the user that session was handed out to.
+     * - Testing what stands in the settings form - a key or an address not saved yet - can reach any
+     *   address from this host, so it needs the right a command on the host needs: `other.execute`.
+     *   Listing the models of the saved configuration needs nothing more than the request itself.
+     *
+     * @param obj the request
+     * @param command what it asks for
+     */
+    authorize(obj: ioBroker.Message, command: AiCommand): Promise<string | null>;
+    /**
+     * Whether a user has `other.execute` - the right `cmdExec` is checked against
+     *
+     * @param user the user, `system.user.xy`
+     */
+    private mayExecute;
     /**
      * Provider, key and address of a configured provider - all from the configuration
      *

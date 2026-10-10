@@ -60,7 +60,7 @@ export interface AiChatRequest {
     tools?: OpenAITool[];
     /** How long the caller is willing to wait, in milliseconds */
     timeout?: number;
-    /** Token of the push subscription of this editor, see `AI_PUSH_MESSAGE_TYPE` */
+    /** The secret the adapter handed out when this editor subscribed, see `AI_PUSH_MESSAGE_TYPE` */
     uiSession?: string;
     /** Id of this request, repeated in the pushed answer */
     requestId?: string;
@@ -70,6 +70,17 @@ export interface AiChatRequest {
 export type AiChatResponse =
     | ({ success: true } & AiChatResult)
     | { success?: false; error: string; finishReason?: string; usage?: AiChatResult['usage'] };
+
+/**
+ * What the adapter answers to the subscription of `AI_PUSH_MESSAGE_TYPE`. `session` is the secret the
+ * editor names in `uiSession` from then on - it is made by the adapter and bound to the user who
+ * subscribed, so no other editor can have answers pushed to itself by naming it
+ */
+export interface AiSubscribeResponse {
+    accepted: boolean;
+    error?: string;
+    session?: string;
+}
 
 /** What the callback of `ai:chat` gets when the answer is pushed later */
 export interface AiAcceptedResponse {

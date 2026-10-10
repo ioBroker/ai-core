@@ -1,6 +1,13 @@
 const assert = require('node:assert').strict;
 const http = require('node:http');
-const { chatCompletion, listModels, AiRequestError, AiBackend, readAiSettings, describeConnectionError } = require('../build');
+const {
+    chatCompletion,
+    listModels,
+    AiRequestError,
+    AiBackend,
+    readAiSettings,
+    describeConnectionError,
+} = require('../build');
 
 /**
  * A local OpenAI-compatible endpoint. `handler` decides the answer of every request and sees what
@@ -39,13 +46,16 @@ function chatAnswer(message, extra = {}) {
     };
 }
 
-/** Just enough of an adapter for AiBackend */
-function fakeAdapter() {
+/** Just enough of an adapter for AiBackend. `executors` are the users with `other.execute` */
+function fakeAdapter(executors = ['system.user.admin']) {
     const sent = [];
     const pushed = [];
     return {
         sent,
         pushed,
+        calculatePermissionsAsync(user) {
+            return Promise.resolve({ user, other: { execute: executors.includes(user) } });
+        },
         log: { debug() {}, info() {}, warn() {}, error() {} },
         sendTo(from, command, payload, callback) {
             sent.push({ from, command, payload, callback });
@@ -253,7 +263,10 @@ describe('Test providers and AiBackend', function () {
             const aggregate = Object.assign(new AggregateError([new Error('connect ECONNREFUSED ::1:1')], ''), {
                 code: 'ECONNREFUSED',
             });
-            assert.equal(describeConnectionError(aggregate, new URL('http://localhost:1')), 'connect ECONNREFUSED ::1:1');
+            assert.equal(
+                describeConnectionError(aggregate, new URL('http://localhost:1')),
+                'connect ECONNREFUSED ::1:1',
+            );
             const bare = Object.assign(new Error(''), { code: 'ECONNRESET' });
             assert.equal(describeConnectionError(bare, new URL('http://localhost:1')), 'ECONNRESET (localhost:1)');
         });
@@ -329,13 +342,14 @@ describe('Test providers and AiBackend', function () {
             answer = () => ({ json: chatAnswer({ content: 'pushed' }) });
             const { adapter, ai } = backend({ customUrl: endpoint.url });
             assert.equal(ai.onUiClientSubscribe({ clientId: 'c1', message: { message: { type: 'other' } } }), null);
-            assert.deepEqual(
-                ai.onUiClientSubscribe({
-                    clientId: 'c1',
-                    message: { message: { type: 'aiChatAnswer', data: { sessionToken: 'tok' } } },
-                }),
-                { accepted: true },
-            );
+            const subscribed = ai.onUiClientSubscribe({
+                clientId: 'c1',
+                message: { message: { type: 'aiChatAnswer', data: { sessionToken: 'tok' } } },
+            });
+            assert.equal(subscribed.accepted, true);
+            // the secret is the adapter's, whatever the editor proposed
+            assert.match(subscribed.session, /^[0-9a-f]{48}$/);
+            const tok = subscribed.session;
             ai.handleMessage({
                 command: 'ai:chat',
                 from: 'x',
@@ -344,7 +358,7 @@ describe('Test providers and AiBackend', function () {
                     provider: 'custom',
                     model: 'm',
                     messages: [{ role: 'user', content: 'hi' }],
-                    uiSession: 'tok',
+                    uiSession: tok,
                     requestId: 'r1',
                 },
             });
@@ -364,7 +378,7 @@ describe('Test providers and AiBackend', function () {
                     provider: 'custom',
                     model: 'm',
                     messages: [{ role: 'user', content: 'hi' }],
-                    uiSession: 'tok',
+                    uiSession: tok,
                     requestId: 'r2',
                 },
             });
@@ -396,6 +410,90 @@ describe('Test providers and AiBackend', function () {
             await waitFor(() => adapter.sent.length === 2);
             assert.match(adapter.sent[1].payload.error, /Connection failed/);
             assert.equal(endpoint.requests.length, 1);
+        });
+
+        it('does not push to a session that the editor made up', async function () {
+            answer = () => ({ json: chatAnswer({ content: 'plain' }) });
+            const { adapter, ai } = backend({ customUrl: endpoint.url });
+            ai.onUiClientSubscribe({
+                clientId: 'c1',
+                message: { message: { type: 'aiChatAnswer', data: { sessionToken: 'tok' } } },
+            });
+            ai.handleMessage({
+                command: 'ai:chat',
+                from: 'x',
+                callback: {},
+                message: {
+                    provider: 'custom',
+                    model: 'm',
+                    messages: [{ role: 'user', content: 'hi' }],
+                    uiSession: 'tok',
+                    requestId: 'r1',
+                },
+            });
+            await waitFor(() => adapter.sent.length === 1);
+            assert.equal(adapter.sent[0].payload.content, 'plain');
+            assert.equal(adapter.pushed.length, 0);
+        });
+
+        it('serves a session only to the user it was handed out to', async function () {
+            answer = () => ({ json: chatAnswer({ content: 'pushed' }) });
+            const { adapter, ai } = backend({ customUrl: endpoint.url });
+            const { session } = ai.onUiClientSubscribe({
+                clientId: 'c1',
+                message: { user: 'system.user.admin', message: { type: 'aiChatAnswer' } },
+            });
+            const chat = (user, requestId) =>
+                ai.handleMessage({
+                    command: 'ai:chat',
+                    from: 'x',
+                    user,
+                    callback: {},
+                    message: {
+                        provider: 'custom',
+                        model: 'm',
+                        messages: [{ role: 'user', content: 'hi' }],
+                        uiSession: session,
+                        requestId,
+                    },
+                });
+
+            chat('system.user.guest', 'r1');
+            await waitFor(() => adapter.sent.length === 1);
+            assert.equal(adapter.sent[0].payload.error, 'This AI session belongs to another user');
+            assert.equal(adapter.pushed.length, 0);
+            assert.equal(endpoint.requests.length, 0);
+
+            chat('system.user.admin', 'r2');
+            await waitFor(() => adapter.pushed.length === 1);
+            assert.equal(adapter.pushed[0].data.content, 'pushed');
+        });
+
+        it('tests the values of the form only for a user with the "execute" right', async function () {
+            answer = () => ({ json: { data: [{ id: 'x' }] } });
+            const { adapter, ai } = backend({ customKey: 'stored', customUrl: endpoint.url });
+            const models = (user, message) =>
+                ai.handleMessage({ command: 'ai:models', from: 'x', user, callback: {}, message });
+
+            models('system.user.guest', { provider: 'custom', apiKey: 'form-key', baseUrl: endpoint.url });
+            await waitFor(() => adapter.sent.length === 1);
+            assert.match(adapter.sent[0].payload.error, /requires the "execute" right/);
+            assert.equal(endpoint.requests.length, 0);
+
+            // the saved configuration may be listed by anybody who may ask at all
+            models('system.user.guest', { provider: 'custom' });
+            await waitFor(() => adapter.sent.length === 2);
+            assert.deepEqual(adapter.sent[1].payload.models, ['x']);
+
+            models('system.user.admin', { provider: 'custom', apiKey: 'form-key', baseUrl: endpoint.url });
+            await waitFor(() => adapter.sent.length === 3);
+            assert.deepEqual(adapter.sent[2].payload.models, ['x']);
+            assert.equal(endpoint.requests[1].headers.authorization, 'Bearer form-key');
+
+            // nobody named - another instance, or a platform too old to name the user
+            models(undefined, { provider: 'custom', apiKey: 'form-key', baseUrl: endpoint.url });
+            await waitFor(() => adapter.sent.length === 4);
+            assert.deepEqual(adapter.sent[3].payload.models, ['x']);
         });
 
         it('says which credential is missing in manager mode', async function () {

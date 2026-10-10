@@ -97,6 +97,10 @@ import { runToolLoop, type OpenAIMessage } from '@iobroker/ai-core/build/shared'
     Placeholder for the next version (at the beginning of the line):
     ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+- (@GermanBluefox) Changed: the push session is a secret of the adapter, bound to the user who subscribed
+- (@GermanBluefox) Changed: testing the values of the settings form needs the "execute" right of the asking user
+
 ### 0.0.3 (2026-10-09)
 - (@GermanBluefox) Fixed: "Connection failed" says why, also when a host has several addresses (`localhost`)
 
