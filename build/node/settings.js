@@ -1,9 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SYSTEM_AI_OBJECT_ID = void 0;
+exports.AI_SYSTEM_CREDENTIAL_TYPE = exports.SYSTEM_AI_OBJECT_ID = void 0;
 exports.readAiSettings = readAiSettings;
 exports.systemAiSettings = systemAiSettings;
 exports.readSystemAiSettings = readSystemAiSettings;
+exports.usesSystemAiSettings = usesSystemAiSettings;
+exports.readAdapterAiSettings = readAdapterAiSettings;
 exports.baseUrlOf = baseUrlOf;
 exports.isProviderConfigured = isProviderConfigured;
 exports.listAvailableProviders = listAvailableProviders;
@@ -97,6 +99,34 @@ async function readSystemAiSettings(adapter) {
     catch {
         return systemAiSettings(undefined);
     }
+}
+/** Value of the credential-type field of an adapter that takes the system-wide settings of `system.ai` */
+exports.AI_SYSTEM_CREDENTIAL_TYPE = 'system';
+/**
+ * Whether an adapter takes the system-wide settings of `system.ai`: its credential-type field says so,
+ * or its own fields set up no provider at all - an adapter nobody configured uses what was set up once
+ * for the whole system in admin
+ *
+ * @param native the configuration of the instance (`this.config`)
+ * @param fields what the fields are called in this adapter
+ */
+function usesSystemAiSettings(native, fields) {
+    const cfg = (native || {});
+    if (fields.credentialType && text(cfg[fields.credentialType]) === exports.AI_SYSTEM_CREDENTIAL_TYPE) {
+        return true;
+    }
+    return !listAvailableProviders(readAiSettings(native, fields)).length;
+}
+/**
+ * The AI settings an adapter works with: the system-wide ones of `system.ai` (see
+ * {@link usesSystemAiSettings}) or its own. Read anew on every call, so a change in either counts at once
+ *
+ * @param adapter the adapter
+ * @param native the configuration of the instance (`this.config`)
+ * @param fields what the fields are called in this adapter
+ */
+async function readAdapterAiSettings(adapter, native, fields) {
+    return usesSystemAiSettings(native, fields) ? readSystemAiSettings(adapter) : readAiSettings(native, fields);
 }
 /**
  * The address a provider is sent to - only `custom` has one. `openai` used to inherit the address of

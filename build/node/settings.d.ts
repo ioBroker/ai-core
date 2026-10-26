@@ -73,6 +73,26 @@ export declare function systemAiSettings(native: SystemAiNative | null | undefin
  * @param adapter the adapter that reads it
  */
 export declare function readSystemAiSettings(adapter: ioBroker.Adapter): Promise<AiSettings>;
+/** Value of the credential-type field of an adapter that takes the system-wide settings of `system.ai` */
+export declare const AI_SYSTEM_CREDENTIAL_TYPE = "system";
+/**
+ * Whether an adapter takes the system-wide settings of `system.ai`: its credential-type field says so,
+ * or its own fields set up no provider at all - an adapter nobody configured uses what was set up once
+ * for the whole system in admin
+ *
+ * @param native the configuration of the instance (`this.config`)
+ * @param fields what the fields are called in this adapter
+ */
+export declare function usesSystemAiSettings(native: object | null | undefined, fields: AiNativeFields): boolean;
+/**
+ * The AI settings an adapter works with: the system-wide ones of `system.ai` (see
+ * {@link usesSystemAiSettings}) or its own. Read anew on every call, so a change in either counts at once
+ *
+ * @param adapter the adapter
+ * @param native the configuration of the instance (`this.config`)
+ * @param fields what the fields are called in this adapter
+ */
+export declare function readAdapterAiSettings(adapter: ioBroker.Adapter, native: object | null | undefined, fields: AiNativeFields): Promise<AiSettings>;
 /**
  * The address a provider is sent to - only `custom` has one. `openai` used to inherit the address of
  * the custom endpoint, which sent the OpenAI key to whatever host that pointed at (javascript #2369)
