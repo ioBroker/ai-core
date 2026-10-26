@@ -5,7 +5,8 @@
  * Wiring in an adapter:
  *
  * ```ts
- * this.ai = new AiBackend(this, { getSettings: () => readAiSettings(this.config, MY_AI_FIELDS) });
+ * // the own settings, or the system-wide ones of `system.ai` - see `readAdapterAiSettings`
+ * this.ai = new AiBackend(this, { getSettings: () => readAdapterAiSettings(this, this.config, MY_AI_FIELDS) });
  * // adapter options
  * uiClientSubscribe: info => this.ai.onUiClientSubscribe(info) ?? { accepted: false },
  * uiClientUnsubscribe: info => this.ai.onUiClientUnsubscribe(info),

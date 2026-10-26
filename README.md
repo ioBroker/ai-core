@@ -19,11 +19,11 @@ form, and only for `custom` (`resolveTestEndpoint`).
 ## Use in an adapter
 
 ```ts
-import { AiBackend, readAiSettings, type AiNativeFields } from '@iobroker/ai-core';
+import { AiBackend, readAdapterAiSettings, type AiNativeFields } from '@iobroker/ai-core';
 
 /** What the AI fields are called in the `native` of this adapter */
 const AI_FIELDS: AiNativeFields = {
-    credentialType: 'aiCredentialType', // 'manual' | 'manager'
+    credentialType: 'aiCredentialType', // 'system' | 'manual' | 'manager'
     keys: { openai: 'aiOpenAiKey', anthropic: 'aiAnthropicKey', custom: 'aiCustomKey' },
     credentialIds: { openai: 'aiCredentialOpenAi', anthropic: 'aiCredentialAnthropic' },
     customBaseUrl: 'aiCustomUrl',
@@ -32,7 +32,7 @@ const AI_FIELDS: AiNativeFields = {
 
 class MyAdapter extends Adapter {
     private ai = new AiBackend(this, {
-        getSettings: () => readAiSettings(this.config, AI_FIELDS),
+        getSettings: () => readAdapterAiSettings(this, this.config, AI_FIELDS),
         // command names an older editor of this adapter still sends
         aliases: { aiChat: 'ai:chat', aiModels: 'ai:models', getAvailableAiProviders: 'ai:providers' },
     });
@@ -60,8 +60,10 @@ class MyAdapter extends Adapter {
 The keys have to be in `encryptedNative` and `protectedNative` of `io-package.json`, and the adapter
 needs `common.messagebox: true`.
 
-The system-wide settings of `system.ai` (admin's assistant settings) are read with
-`readSystemAiSettings(adapter)` into the same `AiSettings` shape.
+The AI is set up once for the whole system in admin (system settings → AI) and stored in `system.ai`.
+`readAdapterAiSettings` uses these settings if the credential type of the adapter is `system`, or if
+the adapter sets up no provider of its own; otherwise its own fields count (`readAiSettings`).
+`readSystemAiSettings(adapter)` reads `system.ai` alone into the same `AiSettings` shape.
 
 ## Commands
 
@@ -78,7 +80,8 @@ An editor that subscribed with `subscribeOnInstance(instance, 'aiChatAnswer', { 
 ## Building blocks
 
 - `chatCompletion(params)`, `listModels(connection)` - one request to a provider; throw `AiRequestError`
-- `readAiSettings(native, fields)`, `systemAiSettings(native)`, `listAvailableProviders(settings)`,
+- `readAdapterAiSettings(adapter, native, fields)`, `usesSystemAiSettings(native, fields)`,
+  `readAiSettings(native, fields)`, `systemAiSettings(native)`, `listAvailableProviders(settings)`,
   `resolveTestEndpoint(settings, provider, form)`
 - `AiCredentialStore` - reads keys of type `ai` from `system.credentials.*` and follows their changes
 - `runToolLoop(options)` - the agent loop: ask, run the tools, ask again
@@ -97,6 +100,9 @@ import { runToolLoop, type OpenAIMessage } from '@iobroker/ai-core/build/shared'
     Placeholder for the next version (at the beginning of the line):
     ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+- (@GermanBluefox) Added: `readAdapterAiSettings` - an adapter takes the system-wide AI settings of `system.ai` if its credential type is `system` or it sets up no provider of its own
+
 ### 0.0.4 (2026-10-10)
 - (@GermanBluefox) Changed: the push session is a secret of the adapter, bound to the user who subscribed
 - (@GermanBluefox) Changed: testing the values of the settings form needs the "execute" right of the asking user

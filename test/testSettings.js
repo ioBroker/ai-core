@@ -1,6 +1,8 @@
 const assert = require('node:assert').strict;
 const {
     readAiSettings,
+    readAdapterAiSettings,
+    usesSystemAiSettings,
     systemAiSettings,
     baseUrlOf,
     isProviderConfigured,
@@ -125,6 +127,69 @@ describe('Test AI settings', function () {
 
         it('ignores an unknown provider', function () {
             assert.equal(systemAiSettings({ provider: 'skynet' }).defaultProvider, undefined);
+        });
+    });
+
+    describe('readAdapterAiSettings', function () {
+        const SYSTEM_AI = {
+            provider: 'anthropic',
+            model: 'claude-opus-5-5',
+            credentialId: 'system.credentials.anthropic',
+        };
+        /** An adapter that can only read `system.ai` */
+        function fakeAdapter(native) {
+            return {
+                getForeignObjectAsync: async id => (id === 'system.ai' && native ? { _id: id, native } : null),
+            };
+        }
+
+        it('takes system.ai if the credential type says "system", even with own keys', async function () {
+            const native = { credentialType: 'system', claudeKey: 'own-key' };
+            assert.equal(usesSystemAiSettings(native, JAVASCRIPT_FIELDS), true);
+            const settings = await readAdapterAiSettings(fakeAdapter(SYSTEM_AI), native, JAVASCRIPT_FIELDS);
+            assert.equal(settings.credentialType, 'manager');
+            assert.deepEqual(settings.credentialIds, { anthropic: 'system.credentials.anthropic' });
+            assert.deepEqual(settings.keys, {});
+            assert.equal(settings.defaultModel, 'claude-opus-5-5');
+        });
+
+        it('takes system.ai if the adapter sets up no provider of its own', async function () {
+            for (const native of [{}, { credentialType: 'manual' }, { aiCredentialType: 'manager' }]) {
+                const fields = 'aiCredentialType' in native ? VIS_FIELDS : JAVASCRIPT_FIELDS;
+                assert.equal(usesSystemAiSettings(native, fields), true);
+                const settings = await readAdapterAiSettings(fakeAdapter(SYSTEM_AI), native, fields);
+                assert.equal(settings.defaultProvider, 'anthropic');
+            }
+        });
+
+        it('keeps the own settings as soon as one provider is set up', async function () {
+            const own = [
+                [{ credentialType: 'manual', geminiKey: 'g' }, JAVASCRIPT_FIELDS, 'gemini'],
+                [
+                    { credentialType: 'manager', credentialIdGptKey: 'system.credentials.gpt' },
+                    JAVASCRIPT_FIELDS,
+                    'openai',
+                ],
+                [{ aiCustomUrl: 'http://ollama:11434/v1' }, VIS_FIELDS, 'custom'],
+            ];
+            for (const [native, fields, provider] of own) {
+                assert.equal(usesSystemAiSettings(native, fields), false);
+                const settings = await readAdapterAiSettings(fakeAdapter(SYSTEM_AI), native, fields);
+                assert.deepEqual(
+                    listAvailableProviders(settings).map(item => item.provider),
+                    [provider],
+                );
+                assert.equal(settings.defaultProvider, undefined);
+            }
+        });
+
+        it('gives empty settings without system.ai', async function () {
+            const settings = await readAdapterAiSettings(
+                fakeAdapter(null),
+                { credentialType: 'system' },
+                JAVASCRIPT_FIELDS,
+            );
+            assert.deepEqual(listAvailableProviders(settings), []);
         });
     });
 
