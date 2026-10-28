@@ -100,8 +100,9 @@ import { runToolLoop, type OpenAIMessage } from '@iobroker/ai-core/build/shared'
     Placeholder for the next version (at the beginning of the line):
     ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 0.0.6 (2026-10-28)
 - (@GermanBluefox) Added: OpenRouter as provider (`openrouter`); its model list is public, so `listModels` checks the key at `/key` first
+
 ### 0.0.5 (2026-10-26)
 - (@GermanBluefox) Added: `readAdapterAiSettings` - an adapter takes the system-wide AI settings of `system.ai` if its credential type is `system` or it sets up no provider of its own
 
