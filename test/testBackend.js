@@ -7,6 +7,8 @@ const {
     AiBackend,
     readAiSettings,
     describeConnectionError,
+    AI_PROVIDERS,
+    isAiProvider,
 } = require('../build');
 
 /**
@@ -147,6 +149,22 @@ describe('Test providers and AiBackend', function () {
                 }),
                 /No API key/,
             );
+        });
+
+        it('knows OpenRouter as a provider with a fixed host, which needs a key', async function () {
+            assert.ok(AI_PROVIDERS.includes('openrouter'));
+            assert.ok(isAiProvider('openrouter'));
+            for (const call of [
+                chatCompletion({
+                    provider: 'openrouter',
+                    apiKey: '',
+                    model: 'm',
+                    messages: [{ role: 'user', content: 'x' }],
+                }),
+                listModels({ provider: 'openrouter', apiKey: '', baseUrl: 'http://elsewhere/v1' }),
+            ]) {
+                await assert.rejects(call, /No API key/);
+            }
         });
 
         it('does not fall back to OpenAI for a custom provider without an address', async function () {

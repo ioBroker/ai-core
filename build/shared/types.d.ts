@@ -6,7 +6,7 @@
  * see this one shape.
  */
 /** The providers an adapter can talk to */
-export type AiProvider = 'openai' | 'anthropic' | 'gemini' | 'deepseek' | 'custom';
+export type AiProvider = 'openai' | 'anthropic' | 'gemini' | 'deepseek' | 'openrouter' | 'custom';
 /** All providers, in the order they are offered */
 export declare const AI_PROVIDERS: readonly AiProvider[];
 /** Whether a value names a known provider */

@@ -4,8 +4,8 @@ The AI backend shared by `admin`, `javascript` and `vis-2`: talking to the LLM p
 of an adapter, the API keys of the credential store and the sendTo protocol between an editor and its
 adapter. The matching React components are in [`@iobroker/ai-gui`](https://github.com/ioBroker/ai-gui).
 
-Providers: OpenAI, Anthropic, Google Gemini, DeepSeek and any OpenAI-compatible endpoint (`custom`:
-Ollama, LM Studio, OpenRouter, ...). Everything speaks the OpenAI chat-completion format; Anthropic is
+Providers: OpenAI, Anthropic, Google Gemini, DeepSeek, OpenRouter (one key for the models of many vendors,
+model ids as `vendor/model`) and any OpenAI-compatible endpoint (`custom`: Ollama, LM Studio, ...). Everything speaks the OpenAI chat-completion format; Anthropic is
 translated on the way in and out.
 
 ## The rule behind it
@@ -100,6 +100,8 @@ import { runToolLoop, type OpenAIMessage } from '@iobroker/ai-core/build/shared'
     Placeholder for the next version (at the beginning of the line):
     ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+- (@GermanBluefox) Added: OpenRouter as provider (`openrouter`); its model list is public, so `listModels` checks the key at `/key` first
 ### 0.0.5 (2026-10-26)
 - (@GermanBluefox) Added: `readAdapterAiSettings` - an adapter takes the system-wide AI settings of `system.ai` if its credential type is `system` or it sets up no provider of its own
 

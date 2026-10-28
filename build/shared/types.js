@@ -10,7 +10,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AI_PROVIDERS = void 0;
 exports.isAiProvider = isAiProvider;
 /** All providers, in the order they are offered */
-exports.AI_PROVIDERS = ['openai', 'anthropic', 'gemini', 'deepseek', 'custom'];
+exports.AI_PROVIDERS = [
+    'openai',
+    'anthropic',
+    'gemini',
+    'deepseek',
+    'openrouter',
+    'custom',
+];
 /** Whether a value names a known provider */
 function isAiProvider(value) {
     return typeof value === 'string' && exports.AI_PROVIDERS.includes(value);

@@ -7,10 +7,17 @@
  */
 
 /** The providers an adapter can talk to */
-export type AiProvider = 'openai' | 'anthropic' | 'gemini' | 'deepseek' | 'custom';
+export type AiProvider = 'openai' | 'anthropic' | 'gemini' | 'deepseek' | 'openrouter' | 'custom';
 
 /** All providers, in the order they are offered */
-export const AI_PROVIDERS: readonly AiProvider[] = ['openai', 'anthropic', 'gemini', 'deepseek', 'custom'];
+export const AI_PROVIDERS: readonly AiProvider[] = [
+    'openai',
+    'anthropic',
+    'gemini',
+    'deepseek',
+    'openrouter',
+    'custom',
+];
 
 /** Whether a value names a known provider */
 export function isAiProvider(value: unknown): value is AiProvider {

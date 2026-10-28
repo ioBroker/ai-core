@@ -17,8 +17,12 @@ const limits_1 = require("../shared/limits");
 const response_1 = require("../shared/response");
 const http_1 = require("./http");
 const OPENAI_BASE = 'https://api.openai.com/v1';
+const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 const ANTHROPIC_VERSION = '2023-06-01';
-/** Where each provider with a fixed address listens */
+/**
+ * Where each provider with a fixed address listens. `key` is an endpoint that checks the key, for a
+ * provider whose model list is public and therefore accepts any key
+ */
 const ENDPOINTS = {
     openai: { chat: `${OPENAI_BASE}/chat/completions`, models: `${OPENAI_BASE}/models` },
     anthropic: { chat: 'https://api.anthropic.com/v1/messages', models: 'https://api.anthropic.com/v1/models' },
@@ -27,7 +31,15 @@ const ENDPOINTS = {
         models: 'https://generativelanguage.googleapis.com/v1beta/openai/models',
     },
     deepseek: { chat: 'https://api.deepseek.com/chat/completions', models: 'https://api.deepseek.com/models' },
+    // One key for the models of many vendors, addressed as `vendor/model`, e.g. `anthropic/claude-sonnet-4.5`
+    openrouter: {
+        chat: `${OPENROUTER_BASE}/chat/completions`,
+        models: `${OPENROUTER_BASE}/models`,
+        key: `${OPENROUTER_BASE}/key`,
+    },
 };
+/** OpenRouter shows the calling application in its statistics, by these two headers */
+const OPENROUTER_ATTRIBUTION = { 'HTTP-Referer': 'https://www.iobroker.net', 'X-Title': 'ioBroker' };
 /** A request that failed, with a message a user can read */
 class AiRequestError extends Error {
     info;
@@ -76,7 +88,10 @@ function authHeaders(connection) {
     if (connection.provider === 'anthropic') {
         return { 'x-api-key': connection.apiKey, 'anthropic-version': ANTHROPIC_VERSION };
     }
-    return connection.apiKey ? { Authorization: `Bearer ${connection.apiKey}` } : {};
+    return {
+        ...(connection.provider === 'openrouter' ? OPENROUTER_ATTRIBUTION : {}),
+        ...(connection.apiKey ? { Authorization: `Bearer ${connection.apiKey}` } : {}),
+    };
 }
 /** Self-signed certificates only for an endpoint of one's own - never weaken TLS towards a provider */
 function selfSigned(connection) {
@@ -220,6 +235,32 @@ async function chatCompletion(params) {
     return { content, ...(toolCalls ? { tool_calls: toolCalls } : {}), ...info };
 }
 /**
+ * Ask the key endpoint of a provider whose model list is public (OpenRouter): without it, a wrong key
+ * would pass the test of {@link listModels} and fail only at the first chat
+ *
+ * @param connection the provider and its key
+ * @param timeoutMs how long to wait
+ */
+async function checkKey(connection, timeoutMs) {
+    const url = connection.provider === 'custom' ? undefined : ENDPOINTS[connection.provider]?.key;
+    if (!url) {
+        return;
+    }
+    let response;
+    try {
+        response = await (0, http_1.aiHttpRequest)({ url, method: 'GET', headers: authHeaders(connection), timeoutMs });
+    }
+    catch (e) {
+        throw new AiRequestError(e instanceof Error ? e.message : String(e));
+    }
+    if (response.status === 401) {
+        throw new AiRequestError('Invalid API key (401)', {}, 401);
+    }
+    if (response.status < 200 || response.status >= 300) {
+        throw new AiRequestError(describeHttpError(response), {}, response.status);
+    }
+}
+/**
  * The models a provider offers. It is also the test of a key: a provider that answers with a list
  * has accepted it, one that does not says why.
  *
@@ -232,6 +273,7 @@ async function listModels(connection, timeoutMs = limits_1.AI_MODELS_TIMEOUT_MS)
     if (!connection.apiKey && aiKeyRequired(connection)) {
         throw new AiRequestError('No API key provided');
     }
+    await checkKey(connection, timeoutMs);
     let response;
     try {
         response = await (0, http_1.aiHttpRequest)({
